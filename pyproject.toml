@@ -1,0 +1,14 @@
+[project]
+name = "hl7-message-parser"
+version = "0.1.0"
+description = "A lightweight Python library for parsing and constructing HL7 v2.x messages"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+keywords = ["hl7", "healthcare", "lis", "medical", "parser", "ehr", "fhir"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "flake8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
