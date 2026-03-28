@@ -131,6 +131,38 @@ class Segment:
     def __str__(self) -> str:
         return self.raw or f"{self.segment_type}|{'|'.join(str(f) for f in self.fields)}"
 
+    def __repr__(self) -> str:
+        return f"Segment({self.segment_type}, fields={len(self.fields)})"
+
+    def semantic_dict(self) -> dict:
+        """Map common segment fields to semantic keys."""
+        d = {"segment_type": self.segment_type}
+        if self.segment_type == "PID":
+            d.update({
+                "patient_id": self.patient_id,
+                "name": self.patient_name,
+                "dob": self.date_of_birth,
+                "gender": self.gender,
+            })
+        elif self.segment_type == "MSH":
+            d.update({
+                "message_type": self.message_type,
+                "sending_app": self.sending_application,
+                "version": self.version_id,
+            })
+        elif self.segment_type == "OBX":
+            d.update({
+                "observation_id": self.observation_id,
+                "value": self.value,
+                "units": self.units,
+                "status": self.result_status,
+            })
+        
+        # Always include raw fields
+        for i, f in enumerate(self.fields):
+            d[f"field_{i+1}"] = f.value
+        return d
+
 
 @dataclass
 class Message:
@@ -178,12 +210,17 @@ class Message:
         """Convert back to raw HL7 string with \\r segment delimiters."""
         return "\r".join(str(seg) for seg in self.segments)
 
-    def to_dict(self) -> dict:
-        """Convert message to a dictionary representation."""
+    def to_dict(self, semantic: bool = False) -> dict:
+        """Convert message to a dictionary representation.
+        
+        Args:
+            semantic: If True, uses human-readable keys (e.g. 'patient_id') for common segments.
+        """
         result = {}
         for seg in self.segments:
             key = seg.segment_type
-            entry = {f"field_{i}": f.value for i, f in enumerate(seg.fields)}
+            entry = seg.semantic_dict() if semantic else {f"field_{i+1}": f.value for i, f in enumerate(seg.fields)}
+            
             if key in result:
                 if not isinstance(result[key], list):
                     result[key] = [result[key]]
@@ -191,6 +228,22 @@ class Message:
             else:
                 result[key] = entry
         return result
+
+    def pretty_print(self) -> str:
+        """Return a formatted string representing the message structure."""
+        lines = [f"HL7 Message ({self.message_type}^{self.trigger_event})"]
+        for i, seg in enumerate(self.segments):
+            prefix = "├── " if i < len(self.segments) - 1 else "└── "
+            lines.append(f"{prefix}{seg.segment_type}")
+            for j, field in enumerate(seg.fields):
+                if field.value:
+                    f_prefix = "│   ├── " if i < len(self.segments) - 1 else "    ├── "
+                    f_idx = j + 2 if seg.segment_type == "MSH" else j + 1
+                    lines.append(f"{f_prefix}[{seg.segment_type}.{f_idx}] {field.value}")
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return f"Message({self.message_type}, segments={len(self.segments)})"
 
     def __len__(self) -> int:
         return len(self.segments)

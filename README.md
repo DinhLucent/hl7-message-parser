@@ -1,95 +1,125 @@
-# 🏥 HL7 Message Parser
+# hl7-message-parser
 
-[![CI](https://github.com/DinhLucent/hl7-message-parser/actions/workflows/ci.yml/badge.svg)](https://github.com/DinhLucent/hl7-message-parser/actions)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.9+-blue?logo=python)
+![Tests](https://img.shields.io/badge/Tests-passing-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-A lightweight, zero-dependency Python library for **parsing, constructing, and validating HL7 v2.x messages**. Built for healthcare IT professionals working with Laboratory Information Systems (LIS), Electronic Health Records (EHR), and medical device integration.
+A modular, professional HL7 v2.x message engine. It provides a fluent builder API for constructing messages and a robust parser for converting raw clinical data into structured, semantically labeled objects.
 
-## ✨ Features
+## What is HL7 v2.x?
 
-| Feature | Description |
-|---|---|
-| **Parse** | Convert raw HL7 strings into structured Python objects |
-| **Build** | Construct HL7 messages programmatically with a fluent API |
-| **Validate** | Check message integrity, required segments, and field constraints |
-| **Zero Dependencies** | Pure Python — no external packages needed |
-| **Type Hints** | Full PEP 484 type annotations for IDE support |
+Health Level Seven (HL7) Version 2 is the most widely implemented standard for healthcare data exchange in the world. It uses a pipe-delimited (`|`) format to transmit patient information, laboratory results, and clinical orders between EMRs, LIS, and RIS systems.
 
-## 🚀 Quick Start
+## Quick Start
 
-```bash
-pip install -e .
-```
-
-### Parsing a Message
+### Parse a message
 
 ```python
-from hl7_parser import parse_message
+from src.parser import parse_message
 
-raw = "MSH|^~\\&|LAB|FACILITY|EHR|HOSPITAL|20240101120000||ORU^R01|MSG001|P|2.5\rPID|1||12345^^^MRN||DOE^JOHN||19800101|M\rOBX|1|NM|GLU^Glucose||95|mg/dL|70-100|N|||F"
+raw_hl7 = "MSH|^~\\&|LAB|FAC|||20240101||ORU^R01|MSG001|P|2.5\rPID|1||12345||DOE^JOHN"
+msg = parse_message(raw_hl7)
 
-msg = parse_message(raw)
-
-# Access segments
-msh = msg.get_segment("MSH")
-print(msh.get_field(9))   # "ORU^R01"
-print(msh.message_type)    # "ORU"
-print(msh.trigger_event)   # "R01"
-
-# Access patient info
-pid = msg.get_segment("PID")
-print(pid.patient_name)    # "DOE^JOHN"
-print(pid.patient_id)      # "12345"
-
-# Access results
-for obx in msg.get_segments("OBX"):
-    print(f"{obx.observation_id}: {obx.value} {obx.units}")
+print(msg.message_type)  # ORU
+print(msg.pid.patient_name)  # DOE^JOHN
 ```
 
-### Building a Message
+### Use the Fluent Builder
 
 ```python
-from hl7_parser import MessageBuilder
+from src.builder import MessageBuilder
 
 msg = (
     MessageBuilder()
-    .msh(sending_app="LAB", receiving_app="EHR", message_type="ORU^R01")
-    .pid(patient_id="12345", patient_name="DOE^JOHN", dob="19800101")
-    .obx(set_id=1, value_type="NM", observation_id="GLU", value="95", units="mg/dL")
+    .msh(sending_app="LAB", message_type="ORU^R01")
+    .pid(patient_id="PAT001", patient_name="Doe^Jane")
+    .obx(observation_id="8310-5", value="37.5", units="Cel")
     .build()
 )
 
-print(msg.to_hl7())  # Raw HL7 string with \r delimiters
+print(msg.to_hl7())
 ```
 
-## 📋 Supported Message Types
+## Features
 
-- **ORU^R01** — Observation Result (Lab Results)
-- **ORM^O01** — Order Message
-- **ADT^A01-A08** — Admit/Discharge/Transfer
-- **ACK** — Acknowledgment
-- **QRY^Q01** — Query
+- **Semantic Dictionary Export**: Convert messages to dictionaries with human-readable keys (e.g., `patient_id` instead of `field_3`).
+- **Visual Tree View**: Built-in `pretty_print()` for inspecting complex message hierarchies during debugging.
+- **Fluent Builder API**: Chainable methods to construct valid HL7 messages without manual string concatenation.
+- **Modular Architecture**: Separate layers for Parsing, Building, Data Modeling, and Validation.
+- **Pure Python**: Zero external dependencies. Designed for high-speed clinical middleware.
 
-## 🏗️ Architecture
+## How it works — module by module
+
+### `src/models.py` — Data Abstractions
+
+The foundation of the toolkit. Provides the `Message`, `Segment`, and `Field` dataclasses.
+
+#### Visual Inspection
+
+```python
+msg = parse_message(raw_hl7)
+print(msg.pretty_print())
+```
+
+Output:
+```
+HL7 Message (ORU^R01)
+├── MSH
+│   ├── [MSH.3] LAB
+│   ├── [MSH.9] ORU^R01
+├── PID
+│   ├── [PID.3] 12345
+│   ├── [PID.5] DOE^JOHN
+```
+
+#### Semantic Export
+
+```python
+# Standard extract (field_1, field_2...)
+data = msg.to_dict()
+
+# Semantic extract (patient_id, message_type...)
+clean_data = msg.to_dict(semantic=True)
+print(clean_data["PID"]["patient_id"])
+```
+
+### `src/validators.py` — Clinical Rules
+
+Validate message integrity, checking for mandatory fields (like Control ID) and segment sequences.
+
+## Project Structure
 
 ```
-src/
-├── __init__.py          # Public API exports
-├── parser.py            # HL7 message parser
-├── models.py            # Message, Segment, Field models
-├── builder.py           # Fluent message builder
-├── validators.py        # Message validation rules
-└── constants.py         # HL7 segment definitions
+hl7-message-parser/
+├── src/
+│   ├── builder.py          # Fluent API for construction
+│   ├── parser.py           # String-to-Object logic
+│   ├── models.py           # Message/Segment/Field classes
+│   └── validators.py       # HL7 clinical rules
+├── tests/
+│   └── test_parser.py      # Full suite for parser/builder/models
+├── requirements.txt
+├── LICENSE
+└── README.md
 ```
 
-## 🧪 Testing
+## Installation
 
 ```bash
-pip install pytest
-pytest tests/ -v
+git clone https://github.com/DinhLucent/hl7-message-parser.git
+cd hl7-message-parser
+pip install -r requirements.txt
 ```
 
-## 📄 License
+## Running Tests
 
-MIT License — see [LICENSE](LICENSE) for details.
+```bash
+python -m pytest tests/test_parser.py -v
+```
+
+## License
+
+MIT License — see [LICENSE](LICENSE)
+
+---
+Built by [DinhLucent](https://github.com/DinhLucent)
